@@ -1,3 +1,4 @@
+import {prepareReward,playReward,stopReward} from './hardware/reward-audio.mjs';
 import {Engine,correctInput,ranks} from './game/app/src/puzzle/puzzle.engine.mjs';
 import {presentationFrames,tone,unlockAudio} from './game/app/src/puzzle/puzzle.feedback.mjs';
 import {TouchInput} from './game/app/src/input/touch-input.mjs';
@@ -76,7 +77,7 @@ $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenEle
 // Guided mode changes assistance and click gestures only, never its transitions.
 const engine=new Engine();let mode='guided',hintLevel=0,frame=null,currentToken=null,frameTimer=null,stopSound=()=>{},gesture=0,contact='',startedAt=0,finishedSeconds=null;
 let soundWanted=true,audioReady=false;
-async function ensureAudio(){if(!soundWanted)return;try{await unlockAudio();audioReady=true;$('audio-toggle').textContent='Sonido activo ♪';$('audio-toggle').setAttribute('aria-pressed','true');}catch{$('game-feedback').textContent='El navegador no activó el audio. Pulsa Activar sonido; las señales visuales siguen disponibles.';}}
+async function ensureAudio(){if(!soundWanted)return;try{await Promise.all([unlockAudio(),prepareReward()]);audioReady=true;$('audio-toggle').textContent='Sonido activo ♪';$('audio-toggle').setAttribute('aria-pressed','true');}catch{$('game-feedback').textContent='El navegador no activó el audio. Pulsa Activar sonido; las señales visuales siguen disponibles.';}}
 const input=new TouchInput({read:()=>({s:engine.s,session:engine.session,locked:route!=='juego'}),send:sendGame,contact:()=>void ensureAudio(),change:a=>{contact=a?.zone||'';renderPrototypeState();},schedule:(fn,ms)=>setTimeout(fn,ms),unschedule:id=>clearTimeout(id)});
 function explicitAction(type,extra={}){void ensureAudio();return sendGame({type,...extra,stable:true,gesture:`guided-${engine.session}-${++gesture}`});}
 function sendGame(event){
@@ -104,7 +105,7 @@ function syncPresentation(){
  }
  next();
 }
-function resetGame(){input.cancel();clearTimeout(frameTimer);stopSound();engine.reset();frame=null;currentToken=null;hintLevel=0;startedAt=0;finishedSeconds=null;$('game-feedback').textContent='';renderGame();}
+function resetGame(){stopReward();input.cancel();clearTimeout(frameTimer);stopSound();engine.reset();frame=null;currentToken=null;hintLevel=0;startedAt=0;finishedSeconds=null;$('game-feedback').textContent='';renderGame();}
 function setMode(next){mode=next;resetGame();$('mode-guided').setAttribute('aria-pressed',String(mode==='guided'));$('mode-full').setAttribute('aria-pressed',String(mode==='full'));$('game-mode-description').textContent=mode==='guided'?'Recorrido asistido: pide pistas cuando las necesites. Conserva las siete rondas y la misma regla; cinco minutos es una orientación, no un límite.':'Experiencia completa: explora con las tres siluetas táctiles, sin opciones sugeridas. Sin límite de tiempo; la duración depende de tu exploración.';}
 function renderGame(){
  const s=engine.s,busy=!!s.presentation,guided=mode==='guided';
@@ -125,7 +126,7 @@ function renderGame(){
  $('request-hint').textContent=hintLevel===0?'Necesito una pista':hintLevel===1?'Aclarar la relación':hintLevel===2?'Mostrar una opción sugerida':'Pistas mostradas';
  const q=s.context?ranks(s.context.B)[s.context.t]:0;
  $('hint-text').textContent=hintLevel===0?'':hintLevel===1?'Compara el lugar de cada duración dentro de su grupo; no busques sonidos iguales.':hintLevel===2?`El destino ocupa el lugar ${q+1} de ${n}, ordenando sus ecos de menor a mayor. Busca ese mismo lugar entre los impulsos.`:`La opción ${correctInput(s.context)+1} tiene el mismo rango que el destino. Puedes seleccionarla y comprobar la respuesta.`;
- $('game-win').hidden=!s.win;
+ $('game-win').hidden=!s.win;if(s.win&&route==='juego'&&soundWanted)playReward(engine.session);
  renderPrototypeState();renderSignal();updateGameClock();
 }
 function renderPrototypeState(){
@@ -157,7 +158,7 @@ $('request-hint').addEventListener('click',()=>{hintLevel=Math.min(3,hintLevel+1
 $('repeat-signals').addEventListener('click',()=>explicitAction('REPEAT'));
 $('game-reset').addEventListener('click',resetGame);$('play-again').addEventListener('click',resetGame);
 $('mode-guided').addEventListener('click',()=>setMode('guided'));$('mode-full').addEventListener('click',()=>setMode('full'));
-$('audio-toggle').addEventListener('click',async()=>{if(audioReady&&soundWanted){soundWanted=false;stopSound();$('audio-toggle').textContent='Activar sonido ♪';$('audio-toggle').setAttribute('aria-pressed','false');}else{soundWanted=true;await ensureAudio();}});
+$('audio-toggle').addEventListener('click',async()=>{if(audioReady&&soundWanted){soundWanted=false;stopSound();stopReward();$('audio-toggle').textContent='Activar sonido ♪';$('audio-toggle').setAttribute('aria-pressed','false');}else{soundWanted=true;await ensureAudio();}});
 window.addEventListener('blur',()=>{input.cancel();stopSound();});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){input.cancel();stopSound();}});
 
@@ -173,7 +174,7 @@ fetch('media.json',{cache:'no-store'}).then(r=>r.json()).then(data=>{if(typeof d
 function navigate(){
  const requested=location.hash.slice(1),next=['inicio','presentacion','juego','video','en-vivo'].includes(requested)?requested:'inicio';
  if(next==='presentacion'&&route!==next){presentationSeconds=0;slideIndex=0;presentationRunning=false;renderSlide();}
- if(route!==next){input.cancel();stopSound();$('project-video').pause();if(next!=='presentacion')presentationRunning=false;}
+ if(route!==next){input.cancel();stopSound();stopReward();$('project-video').pause();if(next!=='presentacion')presentationRunning=false;}
  route=next;document.querySelectorAll('.route').forEach(s=>s.hidden=s.id!==route);document.querySelectorAll('.site-header nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${route}`?'page':'false'));live?.setVisible(route==='en-vivo');
  document.title=`${{inicio:'UNSEEN — The Missing Piece',presentacion:'Conoce UNSEEN',juego:'Juega UNSEEN',video:'Video UNSEEN','en-vivo':'UNSEEN conectado'}[route]} · Team Nodo`;
  renderGame();window.scrollTo({top:0,behavior:'instant'});
@@ -182,3 +183,5 @@ window.addEventListener('hashchange',navigate);
 window.addEventListener('keydown',e=>{if(route!=='presentacion'||['INPUT','VIDEO'].includes(e.target.tagName)||$('component-dialog').open)return;if(e.key==='ArrowRight'){e.preventDefault();if(slideIndex<4)goSlide(slideIndex+1);}if(e.key==='ArrowLeft'){e.preventDefault();goSlide(slideIndex-1);}});
 setInterval(()=>{if(presentationRunning&&route==='presentacion'&&!document.hidden){presentationSeconds=Math.min(300,presentationSeconds+1);const next=Math.min(4,boundaries.findIndex((n,i)=>i>0&&presentationSeconds<n)-1);if(next>=0&&next!==slideIndex){slideIndex=next;renderSlide();}if(presentationSeconds===300)presentationRunning=false;updatePresentationClock();}if(route==='juego')updateGameClock();},1000);
 mountDrawings();live=mountLive(prototypeMarkup);renderSlide();navigate();
+
+document.addEventListener('pointerdown',()=>{if(soundWanted)void ensureAudio();});document.addEventListener('keydown',()=>{if(soundWanted)void ensureAudio();});
