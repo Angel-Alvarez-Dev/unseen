@@ -1,29 +1,26 @@
 import {Engine,correctInput,ranks} from './game/app/src/puzzle/puzzle.engine.mjs';
 import {presentationFrames,tone,unlockAudio} from './game/app/src/puzzle/puzzle.feedback.mjs';
 import {TouchInput} from './game/app/src/input/touch-input.mjs';
+import geometry from './assets/contornos-cad.json?v=20261030-live-1' with {type:'json'};
+import {mountLive} from './hardware/live.mjs';
 
 const $=id=>document.getElementById(id);
 const mmss=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
 const labels=['Azul','Verde','Rojo','Ausencia'];
 let route='inicio',drawingId=0;
-let geometry={viewBox:'0 0 560 410',body:'M69 155 C80 81 153 43 248 45 C350 23 439 72 476 148 C511 217 495 296 418 332 C339 367 191 355 115 307 C69 278 44 213 69 155Z',zones:[
- 'M84 140 C102 74 178 40 243 56 C256 60 240 90 231 101 C211 119 173 111 143 113 C117 114 99 124 84 140Z',
- 'M254 62 C323 44 392 66 427 105 C432 112 422 119 408 119 C362 101 315 132 282 128 C269 126 243 112 244 104Z',
- 'M148 123 C179 119 224 112 245 126 C254 131 248 143 241 157 C218 186 213 220 211 248 C210 265 177 259 153 267 C139 273 130 260 128 243 C119 207 116 166 125 139 C129 128 136 125 148 123Z'],iris:{cx:354,cy:207,r:65}};
-
+let live;
 function prototypeMarkup(interactive=false){
  const id=`drawing-${++drawingId}`,c=geometry.iris,zoneNames=['izquierda','central','derecha'];
- const rx=c.rx||c.r,ry=c.ry||c.r,scale=rx/65;
+ const scale=c.r/65;
  const blades=Array.from({length:6},(_,i)=>`<g transform="rotate(${i*60})"><path class="iris-blade-shape" d="M0 0 L-68 -39 L-67 -70 L7 -70 L24 -50 Z"/></g>`).join('');
- const centers=geometry.zones.map(d=>{const n=d.match(/-?\d*\.?\d+/g).map(Number),xs=n.filter((_,i)=>i%2===0),ys=n.filter((_,i)=>i%2===1);return [(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2];});
- const callouts=centers.map(([x,y],i)=>`<path d="M${x} ${y}H${i===2?72:i===0?480:80}L${i===2?42:i===0?488:72} ${i===2?292:22}"/><text x="${i===2?35:i===0?426:58}" y="${i===2?307:16}">${String(i+1).padStart(2,'0')} / ${labels[i].toUpperCase()}</text>`).join('');
- return `<svg class="cad-prototype" viewBox="${geometry.viewBox}" xmlns="http://www.w3.org/2000/svg" aria-label="UNSEEN en esquema 2D: tres siluetas táctiles e iris" ${interactive?'':'role="img"'}>
- <defs><pattern id="${id}-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="currentColor" stroke-opacity=".055"/></pattern><clipPath id="${id}-iris"><ellipse cx="${c.cx}" cy="${c.cy}" rx="${rx-7}" ry="${Math.max(12,ry-5)}"/></clipPath></defs>
- <rect width="560" height="410" fill="url(#${id}-grid)"/><g class="construction" fill="none"><path d="M35 25v360M25 35h510M45 365h470M525 45v320"/><path d="M35 25l-4 9m4-9 4 9M35 385l-4-9m4 9 4-9M45 365l9-4m-9 4 9 4M515 365l-9-4m9 4-9 4"/><path stroke-dasharray="5 5" d="M${c.cx-95} ${c.cy}h190M${c.cx} ${c.cy-95}v190"/></g>
- <path class="cad-body" d="${geometry.body}"/><path class="cad-body-inner" d="${geometry.body}"/>
+ const details=geometry.details.map(d=>`<path d="${d}"/>`).join('');
+ return `<svg class="cad-prototype reference-drawing" viewBox="${geometry.viewBox}" xmlns="http://www.w3.org/2000/svg" aria-label="UNSEEN: carcasa circular, panel azul a la izquierda, verde arriba, rojo abajo e iris a la derecha" ${interactive?'':'role="img"'}>
+ <defs><clipPath id="${id}-iris"><circle cx="${c.cx}" cy="${c.cy}" r="${c.r}"/></clipPath></defs>
+ <path class="cad-body" d="${geometry.body}"/>
  <g class="cad-zones">${geometry.zones.map((path,i)=>`<g class="cad-control" data-input="${zoneNames[i]}" data-index="${i}" ${interactive?`role="button" tabindex="0" aria-label="Sensor ${labels[i].toLowerCase()}: ${i===0?'anterior':i===1?'repetir o confirmar':'siguiente'}"`:''}><path class="cad-zone" data-zone="${i}" d="${path}"/><path class="target-outline" data-target-zone="${i}" d="${path}"/></g>`).join('')}</g>
- <g class="iris-unit"><ellipse class="iris-ring" cx="${c.cx}" cy="${c.cy}" rx="${rx+6}" ry="${ry+6}"/><ellipse class="iris-ring inner" cx="${c.cx}" cy="${c.cy}" rx="${rx}" ry="${ry}"/><g class="piece-mark"><path d="M${c.cx-15} ${c.cy-14}h30v10h-12v17h-18Z"/><text x="${c.cx}" y="${c.cy+Math.min(ry-6,36)}" text-anchor="middle">PIEZA</text></g><g clip-path="url(#${id}-iris)"><g class="iris-leaves" transform="translate(${c.cx} ${c.cy}) scale(${scale} ${scale*ry/rx})">${blades}</g></g><ellipse class="absence-target" cx="${c.cx}" cy="${c.cy}" rx="${rx+12}" ry="${ry+12}"/></g>
- <g class="cad-labels">${callouts}<path d="M${c.cx+rx} ${c.cy+16}H530"/><text x="501" y="${c.cy+11}">IRIS</text><text x="218" y="383">ZONAS TÁCTILES + APERTURA</text><text class="brand-on-object" x="164" y="309">UNSEEN</text></g></svg>`;
+ <g class="iris-unit"><path class="iris-ring iris-housing" d="${geometry.housing}"/><g class="mechanism-detail reference-mechanism">${details}</g>
+ <g clip-path="url(#${id}-iris)"><circle class="iris-aperture" cx="${c.cx}" cy="${c.cy}" r="${c.r}"/><g class="piece-mark"><path d="M${c.cx-13} ${c.cy-17}h26v10h-10v21h-16Z"/><text x="${c.cx}" y="${c.cy+29}" text-anchor="middle">PIEZA</text></g><g class="iris-leaves" transform="translate(${c.cx} ${c.cy}) scale(${scale})">${blades}</g></g><circle class="iris-aperture-edge" cx="${c.cx}" cy="${c.cy}" r="${c.r}"/><circle class="absence-target" cx="${c.cx}" cy="${c.cy}" r="${c.r+7}"/></g>
+ <g class="cad-labels reference-labels"><path d="M180 287V264H105"/><text x="105" y="253">01 / AZUL</text><path d="M457 130V93H552"/><text x="477" y="82">02 / VERDE</text><path d="M410 624V675H501"/><text x="430" y="691">03 / ROJO</text><text x="694" y="625">IRIS / APERTURA</text></g></svg>`;
 }
 function mountDrawings(){
  $('hero-prototype').innerHTML=prototypeMarkup();$('game-prototype').innerHTML=prototypeMarkup(true);wireTouch();renderGame();
@@ -115,7 +112,7 @@ function renderGame(){
  const phase={S0:'PRESENCIA',S1:'APRENDIZAJE',S2:'TRANSFERENCIA',S3:'APERTURA',S4:'WIN / IRIS ABIERTO'};
  $('game-phase').textContent=phase[s.state];$('game-state-title').textContent=names[s.state];
  $('game-step').textContent=s.state==='S1'?`CASO ${s.g+1} DE 3`:s.state==='S2'?`RESPUESTA ${5-s.R.length} DE 4`:s.state==='S0'?'ANTES DE EMPEZAR':s.state==='S3'?'LA RONDA ESTÁ COMPLETA':'RESOLUCIÓN DIGITAL';
- $('game-instruction').textContent=busy?'Escucha y observa. Espera a que terminen las señales.':s.state==='S0'?guided?'Pulsa Iniciar. También puedes mantener la silueta central 0,65 segundos.':'Mantén la silueta central 0,65 segundos para empezar.':s.state==='S1'?'El contorno discontinuo marca el destino. Recorre los impulsos y compara el eco antes de confirmar.':s.state==='S2'?'Elige el impulso que llegará al destino. Ahora la elección no muestra el eco antes de confirmar.':s.state==='S3'?'La victoria llega al terminar la apertura, no al comenzar el movimiento.':'El iris terminó de abrirse y reveló la pieza.';
+ $('game-instruction').textContent=busy?'Escucha y observa. Espera a que terminen las señales.':s.state==='S0'?guided?'Pulsa Iniciar. También puedes mantener la silueta verde 0,65 segundos.':'Mantén la silueta verde 0,65 segundos para empezar.':s.state==='S1'?'El contorno discontinuo marca el destino. Recorre los impulsos y compara el eco antes de confirmar.':s.state==='S2'?'Elige el impulso que llegará al destino. Ahora la elección no muestra el eco antes de confirmar.':s.state==='S3'?'La victoria llega al terminar la apertura, no al comenzar el movimiento.':'El iris terminó de abrirse y reveló la pieza.';
  $('game-progress').innerHTML=`<div><span>APRENDIZAJE</span>${Array.from({length:3},(_,i)=>`<i class="${s.g>i?'done':''}" aria-label="Aprendizaje ${i+1}${s.g>i?' completado':''}"></i>`).join('')}</div><div><span>TRANSFERENCIA</span>${Array.from({length:4},(_,i)=>`<i class="${s.state==='S2'&&4-s.R.length>i||s.logicComplete?'done':''}" aria-label="Transferencia ${i+1}"></i>`).join('')}</div>`;
  const n=s.context?.A.length||0;
  $('channel-options').innerHTML=Array.from({length:n},(_,i)=>`<span class="option-tag ${s.selected===i?'selected':''} ${s.context.t===i?'destination':''}"><b>${i+1}</b>${labels[i]}${s.context.t===i?'<small>DESTINO</small>':''}${s.selected===i?'<small>ELEGIDO</small>':''}</span>`).join('');
@@ -174,15 +171,14 @@ $('project-video').addEventListener('error',()=>{$('video-status').textContent='
 fetch('media.json',{cache:'no-store'}).then(r=>r.json()).then(data=>{if(typeof data.video==='string'&&data.video.startsWith('assets/')){publishedVideoURL=data.video;clearLocalVideo();}}).catch(()=>{});
 
 function navigate(){
- const requested=location.hash.slice(1),next=['inicio','presentacion','juego','video'].includes(requested)?requested:'inicio';
+ const requested=location.hash.slice(1),next=['inicio','presentacion','juego','video','en-vivo'].includes(requested)?requested:'inicio';
  if(next==='presentacion'&&route!==next){presentationSeconds=0;slideIndex=0;presentationRunning=false;renderSlide();}
  if(route!==next){input.cancel();stopSound();$('project-video').pause();if(next!=='presentacion')presentationRunning=false;}
- route=next;document.querySelectorAll('.route').forEach(s=>s.hidden=s.id!==route);document.querySelectorAll('.site-header nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${route}`?'page':'false'));
- document.title=`${{inicio:'UNSEEN — The Missing Piece',presentacion:'Conoce UNSEEN',juego:'Juega UNSEEN',video:'Video UNSEEN'}[route]} · Team Nodo`;
+ route=next;document.querySelectorAll('.route').forEach(s=>s.hidden=s.id!==route);document.querySelectorAll('.site-header nav a').forEach(a=>a.setAttribute('aria-current',a.hash===`#${route}`?'page':'false'));live?.setVisible(route==='en-vivo');
+ document.title=`${{inicio:'UNSEEN — The Missing Piece',presentacion:'Conoce UNSEEN',juego:'Juega UNSEEN',video:'Video UNSEEN','en-vivo':'UNSEEN conectado'}[route]} · Team Nodo`;
  renderGame();window.scrollTo({top:0,behavior:'instant'});
 }
 window.addEventListener('hashchange',navigate);
 window.addEventListener('keydown',e=>{if(route!=='presentacion'||['INPUT','VIDEO'].includes(e.target.tagName)||$('component-dialog').open)return;if(e.key==='ArrowRight'){e.preventDefault();if(slideIndex<4)goSlide(slideIndex+1);}if(e.key==='ArrowLeft'){e.preventDefault();goSlide(slideIndex-1);}});
 setInterval(()=>{if(presentationRunning&&route==='presentacion'&&!document.hidden){presentationSeconds=Math.min(300,presentationSeconds+1);const next=Math.min(4,boundaries.findIndex((n,i)=>i>0&&presentationSeconds<n)-1);if(next>=0&&next!==slideIndex){slideIndex=next;renderSlide();}if(presentationSeconds===300)presentationRunning=false;updatePresentationClock();}if(route==='juego')updateGameClock();},1000);
-mountDrawings();renderSlide();navigate();
-fetch('assets/contornos-cad.json').then(r=>r.ok?r.json():null).then(data=>{if(!data)return;const g=data.geometry||data;if(typeof g.body==='string'&&Array.isArray(g.zones)&&g.zones.length===3&&g.iris){geometry={...geometry,...g};mountDrawings();renderSlide();}}).catch(()=>{});
+mountDrawings();live=mountLive(prototypeMarkup);renderSlide();navigate();
