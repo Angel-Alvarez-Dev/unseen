@@ -1,0 +1,72 @@
+{
+  "metadata": {
+    "id": "UNSEEN-V1",
+    "version": "1.1.0",
+    "team": "Team NODO"
+  },
+  "rule": {
+    "id": "ordinal",
+    "ties": "reject"
+  },
+  "states": [
+    "S0",
+    "S1",
+    "S2",
+    "S3",
+    "S4"
+  ],
+  "actions": [
+    "WAKE",
+    "SELECT",
+    "CONFIRM",
+    "REPEAT",
+    "PRESENTATION_END",
+    "REVEAL_END",
+    "UNSTABLE",
+    "RESET"
+  ],
+  "transitions": {
+    "activation": "S0>S1",
+    "learningComplete": "S1>S2",
+    "transferComplete": "S2>S3",
+    "revealComplete": "S3>S4",
+    "learningError": "preserve",
+    "transferError": "reset-round",
+    "unlisted": "no-op"
+  },
+  "learning": {
+    "channels": 3,
+    "ranks": [
+      0,
+      1,
+      2
+    ],
+    "contrastive": true,
+    "generationLimit": 2048
+  },
+  "transfer": {
+    "channels": 4,
+    "ranks": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "absence": 3,
+    "newContextEachConfirmation": true
+  },
+  "feedback": {
+    "unitMs": 90,
+    "channelGapMs": 100,
+    "groupGapMs": 350,
+    "revealMs": 1800,
+    "selectStableMs": 350,
+    "confirmStableMs": 650
+  },
+  "missingPiece": {
+    "initial": "captive-visible",
+    "release": "valid-reveal-end",
+    "interaction": "optional-after-win"
+  },
+  "winCondition": "logic-complete-and-iris-open-and-S4"
+}
