@@ -4,7 +4,7 @@ import {presentationFrames} from './game/app/src/puzzle/puzzle.feedback.mjs';
 import {tone,unlockAudio,preloadAudio} from './hardware/presentation-audio.mjs';
 import {TouchInput} from './game/app/src/input/touch-input.mjs';
 import geometry from './assets/contornos-cad.json?v=20261030-live-1' with {type:'json'};
-import {mountLive} from './hardware/live.mjs';
+import {mountLive} from './hardware/live.mjs?v=20261030-sonido-4';
 
 const $=id=>document.getElementById(id);
 const mmss=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(Math.floor(n%60)).padStart(2,'0')}`;
