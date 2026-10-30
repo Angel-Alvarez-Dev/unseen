@@ -1,6 +1,7 @@
 import {prepareReward,playReward,stopReward} from './hardware/reward-audio.mjs';
 import {Engine,correctInput,ranks} from './game/app/src/puzzle/puzzle.engine.mjs';
-import {presentationFrames,tone,unlockAudio} from './game/app/src/puzzle/puzzle.feedback.mjs';
+import {presentationFrames} from './game/app/src/puzzle/puzzle.feedback.mjs';
+import {tone,unlockAudio,preloadAudio} from './hardware/presentation-audio.mjs';
 import {TouchInput} from './game/app/src/input/touch-input.mjs';
 import geometry from './assets/contornos-cad.json?v=20261030-live-1' with {type:'json'};
 import {mountLive} from './hardware/live.mjs';
@@ -78,7 +79,8 @@ $('fullscreen').addEventListener('click',async()=>{try{if(document.fullscreenEle
 const engine=new Engine();let mode='guided',hintLevel=0,frame=null,currentToken=null,frameTimer=null,stopSound=()=>{},gesture=0,contact='',startedAt=0,finishedSeconds=null;
 let soundWanted=true,audioReady=false;
 async function ensureAudio(){if(!soundWanted)return;try{await Promise.all([unlockAudio(),prepareReward()]);audioReady=true;$('audio-toggle').textContent='Sonido activo ♪';$('audio-toggle').setAttribute('aria-pressed','true');}catch{$('game-feedback').textContent='El navegador no activó el audio. Pulsa Activar sonido; las señales visuales siguen disponibles.';}}
-const input=new TouchInput({read:()=>({s:engine.s,session:engine.session,locked:route!=='juego'}),send:sendGame,contact:()=>void ensureAudio(),change:a=>{contact=a?.zone||'';renderPrototypeState();},schedule:(fn,ms)=>setTimeout(fn,ms),unschedule:id=>clearTimeout(id)});
+let stopContact=()=>{};
+const input=new TouchInput({read:()=>({s:engine.s,session:engine.session,locked:route!=='juego'}),send:sendGame,contact:()=>{void ensureAudio();stopContact();stopContact=tone({group:'A',ms:90},soundWanted);},change:a=>{contact=a?.zone||'';renderPrototypeState();},schedule:(fn,ms)=>setTimeout(fn,ms),unschedule:id=>clearTimeout(id)});
 function explicitAction(type,extra={}){void ensureAudio();return sendGame({type,...extra,stable:true,gesture:`guided-${engine.session}-${++gesture}`});}
 function sendGame(event){
  const before=engine.snapshot(),accepted=engine.dispatch({session:engine.session,...event});
@@ -94,13 +96,13 @@ function sendGame(event){
 }
 function syncPresentation(){
  const p=engine.s.presentation;if(!p||p.token===currentToken)return;
- currentToken=p.token;clearTimeout(frameTimer);stopSound();
+ currentToken=p.token;clearTimeout(frameTimer);stopContact();stopSound();
  const frames=presentationFrames(p,engine.config),session=engine.session,token=p.token;let index=0;
  function next(){
   if(engine.session!==session||engine.s.presentation?.token!==token)return;
   stopSound();frame=frames[index++];
   if(!frame){engine.dispatch({type:p.kind==='reveal'?'REVEAL_END':'PRESENTATION_END',token,session});currentToken=null;frame=null;if(engine.s.win)finishedSeconds=(performance.now()-startedAt)/1000;renderGame();return;}
-  if(route==='juego'&&!document.hidden)stopSound=tone(frame,soundWanted&&audioReady);
+  if(route==='juego'&&!document.hidden)stopSound=tone(frame,soundWanted);
   renderPrototypeState();renderSignal();frameTimer=setTimeout(next,frame.ms);
  }
  next();
@@ -182,6 +184,6 @@ function navigate(){
 window.addEventListener('hashchange',navigate);
 window.addEventListener('keydown',e=>{if(route!=='presentacion'||['INPUT','VIDEO'].includes(e.target.tagName)||$('component-dialog').open)return;if(e.key==='ArrowRight'){e.preventDefault();if(slideIndex<4)goSlide(slideIndex+1);}if(e.key==='ArrowLeft'){e.preventDefault();goSlide(slideIndex-1);}});
 setInterval(()=>{if(presentationRunning&&route==='presentacion'&&!document.hidden){presentationSeconds=Math.min(300,presentationSeconds+1);const next=Math.min(4,boundaries.findIndex((n,i)=>i>0&&presentationSeconds<n)-1);if(next>=0&&next!==slideIndex){slideIndex=next;renderSlide();}if(presentationSeconds===300)presentationRunning=false;updatePresentationClock();}if(route==='juego')updateGameClock();},1000);
-mountDrawings();live=mountLive(prototypeMarkup);renderSlide();navigate();
+preloadAudio();mountDrawings();live=mountLive(prototypeMarkup);renderSlide();navigate();
 
 document.addEventListener('pointerdown',()=>{if(soundWanted)void ensureAudio();});document.addEventListener('keydown',()=>{if(soundWanted)void ensureAudio();});
